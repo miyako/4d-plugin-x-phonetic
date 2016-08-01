@@ -295,6 +295,7 @@
     <ClInclude Include="..\4D Plugin API\Classes\C_TEXT.h" />
     <ClInclude Include="..\4D Plugin API\Classes\C_TIME.h" />
     <ClInclude Include="..\4DPlugin.h" />
+    <ClInclude Include="..\msime.h" />
     <ClInclude Include="4D Plugin API\4DPluginAPI.h" />
     <ClInclude Include="4D Plugin API\EntryPoints.h" />
     <ClInclude Include="4D Plugin API\Flags.h" />

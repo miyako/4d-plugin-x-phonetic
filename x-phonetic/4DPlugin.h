@@ -8,7 +8,7 @@
  #
  # --------------------------------------------------------------------------------*/
 
-
+#include "msime.h"
 
 // --- phonetic
 void Phonetic(sLONG_PTR *pResult, PackagePtr pParams);

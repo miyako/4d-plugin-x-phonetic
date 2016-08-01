@@ -117,6 +117,7 @@
     <ClInclude Include="..\4D Plugin API\Classes\C_REAL.h">
       <Filter>Source\4D Plugin API\Classes\C</Filter>
     </ClInclude>
+    <ClInclude Include="..\msime.h" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Source">
