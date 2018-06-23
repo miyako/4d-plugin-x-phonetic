@@ -8,7 +8,9 @@
  #
  # --------------------------------------------------------------------------------*/
 
+#if VERSIONWIN
 #include "msime.h"
+#endif
 
 // --- phonetic
 void Phonetic(sLONG_PTR *pResult, PackagePtr pParams);
