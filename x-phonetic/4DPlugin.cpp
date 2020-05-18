@@ -14,49 +14,6 @@
 
 #pragma mark -
 
-bool IsProcessOnExit()
-{
-	C_TEXT name;
-	PA_long32 state, time;
-	PA_GetProcessInfo(PA_GetCurrentProcessNumber(), name, &state, &time);
-	CUTF16String procName(name.getUTF16StringPtr());
-	CUTF16String exitProcName((PA_Unichar *)"$\0x\0x\0\0\0");
-	return (!procName.compare(exitProcName));
-}
-
-#if VERSIONWIN
-void CoInit()
-{
-	setlocale(LC_ALL, "Japanese");
-	OleInitialize(NULL);
-	CoInitializeEx(NULL, COINIT_MULTITHREADED);
-}
-void CoDeinit()
-{
-	CoUninitialize();
-}
-
-#endif
-
-void OnStartup()
-{
-#if VERSIONWIN
-	PA_RunInMainProcess((PA_RunInMainProcessProcPtr)CoInit, NULL);
-#endif
-}
-
-void OnCloseProcess()
-{
-#if VERSIONWIN
-	if(IsProcessOnExit())
-	{
-		PA_RunInMainProcess((PA_RunInMainProcessProcPtr)CoDeinit, NULL);
-	}
-#endif
-}
-
-#pragma mark -
-
 void PluginMain(PA_long32 selector, PA_PluginParameters params)
 {
 	try
@@ -88,7 +45,6 @@ void CommandDispatcher (PA_long32 pProcNum, sLONG_PTR *pResult, PackagePtr pPara
 }
 
 // ----------------------------------- phonetic -----------------------------------
-
 
 void Phonetic(sLONG_PTR *pResult, PackagePtr pParams)
 {
