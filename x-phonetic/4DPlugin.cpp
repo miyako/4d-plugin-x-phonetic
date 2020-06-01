@@ -106,10 +106,14 @@ void Phonetic(sLONG_PTR *pResult, PackagePtr pParams)
 				{
 					BSTR sourceText = SysAllocString((const wchar_t *)Param1.getUTF16StringPtr());
 					BSTR phonetic;
-					ifelang->GetPhonetic(sourceText, 1, -1, &phonetic);
-					returnValue.setUTF16String((const PA_Unichar *)phonetic, SysStringLen(phonetic));
+					
+					if (S_OK == ifelang->GetPhonetic(sourceText, 1, -1, &phonetic)) {
+						returnValue.setUTF16String((const PA_Unichar *)phonetic, SysStringLen(phonetic));
+						SysFreeString(phonetic);
+					}
+					
 					SysFreeString(sourceText);
-					SysFreeString(phonetic);
+					
 				}
 				ifelang->Close();
 				ifelang->Release();
