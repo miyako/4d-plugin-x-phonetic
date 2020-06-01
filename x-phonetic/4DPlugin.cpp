@@ -77,6 +77,7 @@ void Phonetic(sLONG_PTR *pResult, PackagePtr pParams)
 			CFStringTransform((CFMutableStringRef)hiragana, NULL, kCFStringTransformLatinHiragana, false);
 			CFRelease(latinTranscription);
 			[outputTextHiragana appendString:hiragana];
+            [hiragana release];
 		}
 		tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer);
 	}
