@@ -1,6 +1,20 @@
 ﻿[
 	{
-		"line": 14,
+		"line": 15,
+		"method": {
+			"type": 1,
+			"methodName": "TEST"
+		}
+	},
+	{
+		"line": 3,
+		"method": {
+			"type": 1,
+			"methodName": "TEST_tagger"
+		}
+	},
+	{
+		"line": 5,
 		"method": {
 			"type": 1,
 			"methodName": "TEST"

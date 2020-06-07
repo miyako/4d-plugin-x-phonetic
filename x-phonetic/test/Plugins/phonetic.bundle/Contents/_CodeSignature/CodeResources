@@ -8,7 +8,7 @@
 		<dict>
 			<key>hash</key>
 			<data>
-			mn37P9LWkqAO/N/Uupsfh/lxM6c=
+			srLaztnZUoXwbtNx3M+ZdkvvZJ8=
 			</data>
 			<key>optional</key>
 			<true/>
@@ -22,10 +22,6 @@
 	<dict>
 		<key>QuickLook/Thumbnail.png</key>
 		<dict>
-			<key>hash</key>
-			<data>
-			hC+U8EqvyIRM1lLakHLfvl4V9Tc=
-			</data>
 			<key>hash2</key>
 			<data>
 			nGfrvibB5KlzvZgF4Bra+l0HpRloxismgTLePnOwCdk=
@@ -33,23 +29,15 @@
 		</dict>
 		<key>Resources/English.lproj/InfoPlist.strings</key>
 		<dict>
-			<key>hash</key>
-			<data>
-			mn37P9LWkqAO/N/Uupsfh/lxM6c=
-			</data>
 			<key>hash2</key>
 			<data>
-			NeefnzUgH+zErCMRTC4MmRNV1xR1yk5diQLy2M9PIIE=
+			ibUReIVkLRKHz8rykUqZ49HkIvrJvVZjpbISCq77KY8=
 			</data>
 			<key>optional</key>
 			<true/>
 		</dict>
 		<key>Resources/constants.xlf</key>
 		<dict>
-			<key>hash</key>
-			<data>
-			Mrr2p29xbDtlDcncQB2gALwlnhc=
-			</data>
 			<key>hash2</key>
 			<data>
 			/QG/tpwQ64Gt9lvNw6QWvH2eRlc9Qa/Q2+kzaNGcE/c=
@@ -57,24 +45,16 @@
 		</dict>
 		<key>Windows/phonetic.4DX</key>
 		<dict>
-			<key>hash</key>
-			<data>
-			J3JyFGJWmqAzqZhuqNF044P+FGU=
-			</data>
 			<key>hash2</key>
 			<data>
-			ird0Va8jm6wL7OWEVb4TuLu2OBShWiOWjQJtUltQGmE=
+			wbb7PRu8G9JWQWxJzfE8m8DjwvaMLmYv+FJoWwqWeCU=
 			</data>
 		</dict>
 		<key>Windows64/phonetic.4DX</key>
 		<dict>
-			<key>hash</key>
-			<data>
-			0ZaK3qBtcILbcAfo6u1vjNH0B8E=
-			</data>
 			<key>hash2</key>
 			<data>
-			1GdgJmBg6fKG6Upg8FEAVdwYsItpP7rYWARORFuHrvg=
+			KSms9TGtJtYydcrtzPEp6Y773a4+3AduuUQxPBkH9tE=
 			</data>
 		</dict>
 		<key>manifest.json</key>

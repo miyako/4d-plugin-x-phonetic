@@ -146,7 +146,9 @@ void Phonetic(PA_PluginParameters params) {
 typedef enum {
     
     phonetic_mode_detail    = 0,
-    phonetic_mode_simple    = 1
+    phonetic_mode_simple    = 1,
+    phonetic_mode_lexical    = 2,
+    phonetic_mode_multiple    = 3
     
 }phonetic_mode_t;
 
@@ -205,6 +207,10 @@ void Phonetics(PA_PluginParameters params) {
                     mode = phonetic_mode_detail;
                 }
                 
+                if(_mode == (const uint8_t *)"lexical") {
+                    mode = phonetic_mode_lexical;
+                }
+ 
             }
             
         }
@@ -225,8 +231,6 @@ void Phonetics(PA_PluginParameters params) {
             
         }
         
-        
-        
     }
     
     C_TEXT Param1;
@@ -235,6 +239,120 @@ void Phonetics(PA_PluginParameters params) {
     Param1.fromParamAtIndex(pParams, 1);
     
 #if VERSIONMAC
+    
+    NSString *sourceText = Param1.copyUTF16String();
+
+    if(mode != phonetic_mode_lexical) {
+        
+           CFLocaleRef locale = CFLocaleCopyCurrent();
+           CFRange range = CFRangeMake(0, [sourceText length]);
+           
+           CFStringTokenizerRef tokenizer = CFStringTokenizerCreate(kCFAllocatorDefault,
+                                                                    (CFStringRef)sourceText,
+                                                                    range,
+                                                                    kCFStringTokenizerUnitWordBoundary,
+                                                                    locale);
+           
+           CFStringTokenizerTokenType tokenType = CFStringTokenizerGoToTokenAtIndex(tokenizer, 0);
+           
+           while (tokenType != kCFStringTokenizerTokenNone)
+           {
+               range = CFStringTokenizerGetCurrentTokenRange(tokenizer);
+                       
+               CFTypeRef latinTranscription = CFStringTokenizerCopyCurrentTokenAttribute(tokenizer, kCFStringTokenizerAttributeLatinTranscription);
+               if(latinTranscription)
+               {
+                   PA_ObjectRef word = PA_CreateObject();
+                   
+                   C_TEXT t;
+                   CUTF16String u16;
+                   
+                   t.setUTF16String([sourceText substringWithRange:NSMakeRange(range.location, range.length)]);
+                   t.copyUTF16String(&u16);
+                   ob_set_a(word, L"word", &u16);
+                   
+                   NSMutableString *outputText = [(NSString *)latinTranscription mutableCopy];
+                   CFStringTransform((CFMutableStringRef)outputText, NULL, kCFStringTransformLatinHiragana, false);
+                   
+                   if (format == phonetic_format_katakana) {
+                       CFStringTransform((CFMutableStringRef)outputText,
+                       NULL,
+                       CFSTR("[:^Modifier Letter:];Hiragana-Katakana"),
+                       false);
+                   }
+                   if (width == phonetic_width_half) {
+                       CFStringTransform((CFMutableStringRef)outputText,
+                       NULL,
+                       kCFStringTransformFullwidthHalfwidth,
+                       false);
+                   }
+                   
+                   t.setUTF16String(outputText);
+                   t.copyUTF16String(&u16);
+                   ob_set_a(word, L"yomi", &u16);
+        
+                   [outputText release];
+                   
+                   PA_Variable v = PA_CreateVariable(eVK_Object);
+                   PA_SetObjectVariable(&v, word);
+                   PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
+                   PA_ClearVariable(&v);
+                   
+                   CFRelease(latinTranscription);
+               }
+               tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer);
+           }
+           CFRelease(tokenizer);
+           CFRelease(locale);
+    }
+            
+    if(mode == phonetic_mode_lexical) {
+        
+        /* ja: Language, Script, TokenType
+         NSLinguisticTagSchemeLexicalClass is not available for ja!
+         */
+        /* en: all 7 types */
+        
+        NSArray<NSLinguisticTagScheme> *tagSchemes = [NSLinguisticTagger availableTagSchemesForLanguage:@"en"];
+        
+        NSLinguisticTagger *tagger = [[NSLinguisticTagger alloc]initWithTagSchemes:tagSchemes options:0];
+        
+        if(tagger) {
+            
+            tagger.string = sourceText;
+            
+            [tagger
+             enumerateTagsInRange:NSMakeRange(0, [sourceText length])
+             scheme:NSLinguisticTagSchemeLexicalClass
+             options:NSLinguisticTaggerOmitWhitespace
+             usingBlock:^(NSLinguisticTag tag, NSRange tokenRange, NSRange sentenceRange, BOOL *stop){
+                
+                PA_ObjectRef word = PA_CreateObject();
+                
+                C_TEXT t;
+                CUTF16String u16;
+                
+                t.setUTF16String([sourceText substringWithRange:tokenRange]);
+                t.copyUTF16String(&u16);
+                ob_set_a(word, L"word", &u16);
+                
+                t.setUTF16String(tag);
+                t.copyUTF16String(&u16);
+                ob_set_a(word, L"tag", &u16);
+                
+                PA_Variable v = PA_CreateVariable(eVK_Object);
+                PA_SetObjectVariable(&v, word);
+                PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
+                PA_ClearVariable(&v);
+                
+            }];
+            
+            [tagger release];
+        }
+        
+    }
+    
+    [sourceText release];
     
 #else
     
@@ -269,6 +387,7 @@ void Phonetics(PA_PluginParameters params) {
                     if (width == phonetic_width_full) {
                         dwCMode |= FELANG_CMODE_FULLWIDTHOUT;
                     }
+                    
                     if (width == phonetic_width_half) {
                         dwCMode |= FELANG_CMODE_HALFWIDTHOUT;
                     }
@@ -276,6 +395,7 @@ void Phonetics(PA_PluginParameters params) {
                     if (format == phonetic_format_katakana) {
                         dwCMode |= FELANG_CMODE_KATAKANAOUT;
                     }
+                    
                     if (format == phonetic_format_hiragana) {
                         dwCMode |= FELANG_CMODE_HIRAGANAOUT;
                     }
@@ -308,8 +428,12 @@ void Phonetics(PA_PluginParameters params) {
                     
                     HRESULT status = S_FALSE;
                     
-                    PA_CollectionRef returnValue = PA_CreateCollection();
+                    PA_CollectionRef returnValue;
                     
+                    if(mode == phonetic_mode_multiple) {
+                        returnValue = PA_CreateCollection();
+                    }
+
                     do
                     {
                         status = ifelang->GetJMorphResult(dwRequest,
@@ -321,8 +445,6 @@ void Phonetics(PA_PluginParameters params) {
                         
                         if (status == S_OK) {
                             
-                            if(mode != phonetic_mode_simple) {
-                                
                                 WDD *pWDD = pResult->pWDD;
                                 
                                 for (int i = 0; i < pResult->cWDD; ++i) {
@@ -337,48 +459,50 @@ void Phonetics(PA_PluginParameters params) {
                                     ob_set_a(morph, L"word", &word);
                                     ob_set_a(morph, L"yomi", &yomi);
                                     
-                                    ob_set_n(morph, L"partOfSpeech", wdd.nPos);
-                                    
-                                    ob_set_b(morph, L"isStartOfPhrase", wdd.fPhrase);
-                                    ob_set_b(morph, L"isAutoCorrect", wdd.fAutoCorrect);
-                                    ob_set_b(morph, L"isNumericPrefix", wdd.fNumericPrefix);
-                                    ob_set_b(morph, L"isUserRegistered", wdd.fUserRegistered);
-                                    ob_set_b(morph, L"isUnknown", wdd.fUnknown);
-                                    ob_set_b(morph, L"isRecentUsed", wdd.fRecentUsed);
-                                    
+									if (mode != phonetic_mode_simple) {
+										ob_set_n(morph, L"partOfSpeech", wdd.nPos);
+										ob_set_b(morph, L"isStartOfPhrase", wdd.fPhrase);
+										ob_set_b(morph, L"isAutoCorrect", wdd.fAutoCorrect);
+										ob_set_b(morph, L"isNumericPrefix", wdd.fNumericPrefix);
+										ob_set_b(morph, L"isUserRegistered", wdd.fUserRegistered);
+										ob_set_b(morph, L"isUnknown", wdd.fUnknown);
+										ob_set_b(morph, L"isRecentUsed", wdd.fRecentUsed);
+									}
+
                                     PA_Variable v = PA_CreateVariable(eVK_Object);
                                     PA_SetObjectVariable(&v, morph);
-                                    PA_SetCollectionElement(returnValue, PA_GetCollectionLength(returnValue), v);
+                                    
+                                    if(mode == phonetic_mode_multiple) {
+                                        PA_SetCollectionElement(returnValue, PA_GetCollectionLength(returnValue), v);
+                                    }else{
+                                        PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
+                                    }
+                                    
                                     PA_ClearVariable(&v);
                                     
                                 }
-                            }else {
-                                
-                                CUTF16String yomi = CUTF16String((const PA_Unichar *)&pResult->pwchOutput[0], pResult->cchOutput);
-                                
-                                PA_Variable v = PA_CreateVariable(eVK_Unistring);
-                                PA_Unistring ustr = PA_CreateUnistring((PA_Unichar *)yomi.c_str());
-                                PA_SetStringVariable(&v, &ustr);
-                                PA_SetCollectionElement(returnValue, PA_GetCollectionLength(returnValue), v);
-                                PA_ClearVariable(&v);
-                                
-                            }
                             
                             CoTaskMemFree(pResult);
-                            
-                            cwchInput = 0;
-                            pwchInput = NULL;
                             pResult = NULL;
+                            cwchInput = 0;
+                            
+                            if(mode == phonetic_mode_multiple) {
+                                pwchInput = NULL;
+                            }else{
+                                pwchInput = L"";
+                            }
                             
                         }
                         
                     } while (status == S_OK);
                     
-                    PA_Variable v = PA_CreateVariable(eVK_Collection);
-                    PA_SetCollectionVariable(&v, returnValue);
-                    PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
-                    PA_ClearVariable(&v);
-                    
+                    if(mode == phonetic_mode_multiple) {
+                        PA_Variable v = PA_CreateVariable(eVK_Collection);
+                        PA_SetCollectionVariable(&v, returnValue);
+                        PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
+                        PA_ClearVariable(&v);
+                    }
+  
                 }
                 ifelang->Close();
                 ifelang->Release();
