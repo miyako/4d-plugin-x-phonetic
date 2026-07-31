@@ -5,121 +5,109 @@
 [![license](https://img.shields.io/github/license/miyako/4d-plugin-x-phonetic)](LICENSE)
 ![downloads](https://img.shields.io/github/downloads/miyako/4d-plugin-x-phonetic/total)
 
-A 4D plugin that converts Japanese text into its phonetic reading (*yomi*), with optional word-by-word breakdown, part-of-speech detail, and English lexical tagging. Built on the OS's native language engine — **Kotoeri / `CFStringTokenizer`** on macOS, **MS-IME (`IFELanguage`)** on Windows — so no dictionary or model ships with the plugin itself.
+`phonetic` converts Japanese text to its phonetic reading (*yomi*), driven entirely by the OS's own language engine rather than a bundled dictionary — `CFStringTokenizer`/`CFStringTransform`/`NSLinguisticTagger` on macOS, the Microsoft IME COM object (`IFELanguage`) on Windows. It exposes two commands: a plain string-in/string-out reading, and a richer word-by-word breakdown with formatting and (Windows-only) morphological detail. Results come back as `Text` or `Collection` — there's nothing plugin-specific to decode.
 
-Two commands are exposed:
-
-| Command | Purpose | Returns |
+| Command | Returns | Purpose |
 |---|---|---|
-| [`Phonetic`](#phonetic) | Quick, single-string hiragana reading | `Text` |
-| [`Phonetics`](#phonetics) | Word-by-word reading with formatting and detail options | `Collection` |
+| [`Phonetic`](#phonetic) | Text | One continuous hiragana reading of the whole input string |
+| [`Phonetics`](#phonetics) | Collection | Word-by-word reading, with format/width options and platform-dependent detail |
+
+**Platforms:** macOS, Windows — both commands run on both, but several `Phonetics` option values behave differently per platform; see [Requirements & platform notes](#requirements--platform-notes) and each command's Description.
+
+---
+
+## Requirements & platform notes
+
+- **Both parameters that carry the input text are mandatory** — there's no overload that omits the text argument on either command.
+- **`Phonetics`'s `options` parameter is optional** — omit it entirely for `mode:"simple"` / `format:"hiragana"` / `width:"full"` defaults.
+- **On Windows**, both commands depend on the Microsoft Japanese IME's COM component (`IFELanguage`, resolved via `CLSIDFromProgID`) being installed and registered on the machine. This is normally present once the Japanese language/IME is installed via Windows' Region & Language settings, but the exact minimum Windows version isn't something that can be confirmed from the plugin source alone — verify on your actual deployment target rather than assuming.
+- **On macOS**, both commands use only OS-bundled Foundation/CoreFoundation APIs (`CFStringTokenizer`, `NSLinguisticTagger`) — no extra install, no permission prompts.
+- **Failure is silent, not a 4D error.** Missing/unregistered MS-IME on Windows, empty input text, or an IME call that internally fails all result in an empty return value (`""` or an empty collection) — nothing throws or raises a catchable 4D error. Don't rely on error-trapping to detect these cases; check for emptiness instead.
+- **`Phonetics`'s `"mode":"multiple"` value has no effect.** The plugin's option parser only recognizes `"simple"`, `"detail"`, and `"lexical"` for the `mode` key — passing `"multiple"` (or any other unrecognized string) is silently ignored and the mode falls back to whatever it already was (`"simple"` by default). There's a nested-candidate-collection code path in the Windows implementation built around a fourth internal mode value, but it is not reachable from any option string the 4D-facing parser accepts — treat it as non-functional from the 4D side rather than a usable mode.
+- **`"lexical"` mode is not equivalent across platforms** — see the Description under [`Phonetics`](#phonetics). It's a meaningful behavioral difference, not just a missing feature.
 
 ---
 
 ## Phonetic
 
-Converts a string of Japanese text to its hiragana reading, as one continuous string.
+**`Phonetic ( text ) → Text`**
 
 ### Syntax
 
-```4d
-$yomi:=Phonetic ( text )
+```
+Phonetic ( text ) -> Text
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
-| `text` | Text → | Japanese (or mixed Japanese/other) text to convert |
-| `$yomi` | ← Text | Hiragana reading of `text` |
+| `text` | Text → | Japanese (or mixed-script) text to convert |
+| Result | ← Text | Hiragana reading of `text`, full-width, all words concatenated with no separators |
 
 ### Description
 
-`Phonetic` is the simple form: pass it a string, get back a string. It always returns **hiragana**, **full-width**, with no per-word breakdown — if you need katakana, half-width, or the individual words/readings, use [`Phonetics`](#phonetics) instead.
+Tokenizes `text` into words using the OS's word-boundary tokenizer, looks up each word's reading, and concatenates the readings back together in order. The output is always **hiragana** and **full-width** — there's no option argument to change that; if you need katakana, half-width, or the individual per-word readings, use [`Phonetics`](#phonetics).
 
-Internally the whole string is tokenized into words, each word's reading is looked up via the OS IME/language engine, and the readings are concatenated back together in order. Non-Japanese runs (Latin text, numbers, punctuation) are passed through the same tokenizer; if the OS has no transcription for a token, that token simply contributes nothing to the output — it is not echoed back untouched, so surprising results (e.g. a shorter output than you expect) can occur for text with a lot of Latin/mixed content. Use `Phonetics` in `"detail"` mode if you need to see exactly how the source was segmented.
+A token the OS engine can't derive a reading for (stray punctuation, some Latin runs) contributes nothing to the output rather than being echoed through unchanged — so the returned string can end up shorter than you might expect for heavily mixed-script input. If you need to see exactly how the input was segmented, use `Phonetics` instead, which returns the source `word` alongside each `yomi`.
 
-If `text` is empty, `Phonetic` returns an empty string; it does not raise an error.
+**On macOS**, an empty or unusable input string returns an empty `Text` result rather than raising an error.
 
-### Platform notes
-
-- **macOS**: uses `CFStringTokenizer` + `CFStringTransform` — always available, no extra setup.
-- **Windows**: uses the Microsoft IME COM object (`IFELanguage`). This requires the Japanese IME (MS-IME) to be installed on the machine running the plugin. If it isn't installed, or the COM object can't be created, `Phonetic` returns an empty string silently — there is no error/exception raised back to the 4D method.
+**On Windows**, the same command drives the MS-IME `IFELanguage` COM object's `GetPhonetic` method. If the IME component isn't installed/registered, or fails to open, or the conversion call itself fails, the command returns an empty `Text` result — there's no exception raised back to your 4D method in any of these cases.
 
 ### Example
+
+No dedicated test method ships for `Phonetic` specifically (the provided samples both exercise `Phonetics`); the example below is illustrative, built only from verified command behavior:
 
 ```4d
 $text:="伊能忠敬は全国を歩いて測量の旅をしたよ"
 $yomi:=Phonetic ($text)
- // $yomi = "いのうただたかはぜんこくをあるいてそくりょうのたびをしたよ"
+ // $yomi is one continuous hiragana string
 ```
 
 ---
 
 ## Phonetics
 
-Converts Japanese text to its reading, word by word, returning a collection of objects. Supports katakana/hiragana, full/half width, and (on Windows) morphological detail and multiple-candidate readings. Also supports an English "lexical class" tagging mode, unrelated to Japanese phonetics.
+**`Phonetics ( text ) → Collection`**
+**`Phonetics ( text ; options ) → Collection`**
 
 ### Syntax
 
-```4d
-$words:=Phonetics ( text )
-$words:=Phonetics ( text ; options )
+```
+Phonetics ( text ) -> Collection
+Phonetics ( text ; options ) -> Collection
 ```
 
 | Parameter | Type | Description |
 |---|---|---|
-| `text` | Text → | Japanese (or mixed) text to convert |
-| `options` | Object → | Optional. See [Options](#options) below |
-| `$words` | ← Collection | One object per word/segment (see [Return value](#return-value)) |
+| `text` | Text → | Japanese (or mixed-script) text to convert |
+| `options` | Object → | Optional. See the options table below; if omitted, all defaults apply |
+| Result | ← Collection | One object per word/segment; shape depends on `mode` and platform — see Description |
 
-### Options
+`options` accepts any combination of these keys; an unrecognized key or value is silently ignored and the default is used — there's no error for a typo'd value, so verify spelling if a result doesn't come back as expected.
 
-`options` is a 4D object with any combination of the following three keys. All are optional; omitted keys fall back to their default.
-
-| Key | Values | Default | Notes |
+| Key | Recognized values | Default | Notes |
 |---|---|---|---|
-| `"mode"` | `"simple"` \| `"detail"` \| `"lexical"` \| `"multiple"` | `"simple"` | See [Modes](#modes) |
-| `"format"` | `"hiragana"` \| `"katakana"` | `"hiragana"` | Applies to the `yomi` field |
-| `"width"` | `"full"` \| `"half"` | `"full"` | Applies to the `yomi` field |
+| `"mode"` | `"simple"`, `"detail"`, `"lexical"` | `"simple"` | `"multiple"` is **not** recognized by the option parser — see [Requirements & platform notes](#requirements--platform-notes) |
+| `"format"` | `"hiragana"`, `"katakana"` | `"hiragana"` | Applies to the `yomi` field |
+| `"width"` | `"full"`, `"half"` | `"full"` | Applies to the `yomi` field |
 
-Any value other than the ones listed above is simply ignored and the default is used — there is no error for a typo'd option value, so double-check spelling if a result doesn't come back as expected.
+### Description
 
-### Modes
+Each element of the returned collection is an object shaped by `mode`:
 
-| Mode | Description | Platform |
+- **`"simple"` (default), both platforms:** `{ word ; yomi }` only.
+- **`"detail"`, on Windows:** adds morphological fields from the IME's analysis — see the field table below.
+- **`"detail"`, on macOS:** behaves identically to `"simple"` — the macOS implementation has no separate code path for the extra fields, so you get `{ word ; yomi }` with nothing else, no error. (The plugin's own Japanese test comment confirms this directly: *"detail: windows only."*)
+- **`"lexical"`, on macOS:** switches entirely to English lexical-class tagging via `NSLinguisticTagger` — output objects are shaped `{ word ; tag }`, and `format`/`width` are irrelevant here since no `yomi` is produced at all. Per Apple's own tagging-scheme documentation, lexical-class tagging is **not available for Japanese** — this mode is only meaningful for English (or other Latin-script) input; running Japanese text through it will not give you a Japanese reading.
+- **`"lexical"`, on Windows:** there is no separate lexical/English-tagging code path at all. Requesting `"lexical"` mode on Windows silently falls through to the same morphological-detail output as `"detail"` mode — `{ word ; yomi ; partOfSpeech ; ... }` — you will **not** get a `tag` field on Windows under any circumstance. If your code branches on the presence of a `tag` property to detect lexical mode, that check will only ever succeed on macOS.
+
+**Detail fields (Windows, `mode` other than `"simple"`):**
+
+| Property | Type | Description |
 |---|---|---|
-| `"simple"` | One object per word: `word` + `yomi` only | macOS & Windows |
-| `"detail"` | Adds morphological detail per word (part of speech, phrase boundaries, etc. — see [Return value](#return-value)) | **Windows only.** On macOS this silently behaves the same as `"simple"` (no error, just no extra fields). |
-| `"lexical"` | Tags each token with its English lexical class (noun, verb, adjective, …) instead of a Japanese reading | macOS & Windows*, **English text only** |
-| `"multiple"` | Like `"detail"`, but returns *all* candidate readings per word (a nested collection per segment) instead of just the top one | **Windows only.** On macOS this behaves the same as `"simple"`. |
-
-\* `"lexical"` mode uses Apple's `NSLinguisticTagger` / the equivalent Windows facility for tagging, and — per the underlying OS documentation — lexical-class tagging is **not available for Japanese**. In practice this mode is only useful for English input; running Japanese text through `"lexical"` mode will return an empty or unreliable result. It's really a separate feature bolted onto the same command rather than a Japanese phonetics mode.
-
-### Return value
-
-The shape of each item in the returned collection depends on `mode`:
-
-**`"simple"` (default) and `"detail"` on macOS:**
-```json
-{ "word": "野茂", "yomi": "やも" }
-```
-
-**`"detail"` on Windows** — adds morphological fields:
-```json
-{
-  "word": "野茂",
-  "yomi": "やも",
-  "partOfSpeech": 0,
-  "isStartOfPhrase": true,
-  "isAutoCorrect": false,
-  "isNumericPrefix": false,
-  "isUserRegistered": false,
-  "isUnknown": false,
-  "isRecentUsed": false
-}
-```
-| Field | Type | Meaning |
-|---|---|---|
-| `partOfSpeech` | Longint | IME-internal part-of-speech code (`nPos` from the Windows morphological analyzer; there is no public 4D-level lookup table for these codes — treat as an opaque numeric ID unless you need to cross-reference the underlying Windows IME SDK) |
+| `word` | Text | Source-text substring for this segment |
+| `yomi` | Text | Reading, formatted per `format`/`width` |
+| `partOfSpeech` | Longint | IME-internal part-of-speech code (raw `nPos` value from the Windows morphological analyzer). There's no public 4D-side lookup table for these codes bundled with the plugin — treat it as an opaque numeric ID unless you cross-reference the Windows IME SDK's own constants. |
 | `isStartOfPhrase` | Boolean | Word begins a new phrase |
 | `isAutoCorrect` | Boolean | Word was auto-corrected by the IME |
 | `isNumericPrefix` | Boolean | Word is a numeric prefix |
@@ -127,62 +115,44 @@ The shape of each item in the returned collection depends on `mode`:
 | `isUnknown` | Boolean | IME could not confidently identify the word |
 | `isRecentUsed` | Boolean | Word was recently used/learned by the IME |
 
-**`"multiple"` (Windows only)** — one collection element per segment, each itself a collection of candidate objects (same shape as `"detail"`):
-```json
-[
-  [ { "word":"...", "yomi":"...", ... }, { "word":"...", "yomi":"...", ... } ],
-  [ { "word":"...", "yomi":"...", ... } ]
-]
-```
+**On macOS**, an empty or unusable input string returns an empty collection rather than raising an error, in every mode.
 
-**`"lexical"`:**
-```json
-{ "word": "run", "tag": "Verb" }
-```
+**On Windows**, the same silent-failure behavior applies as `Phonetic`: an unavailable/unregistered IME component, a failed `Open`, or a failed conversion call all result in an empty collection, never an exception.
 
-### Example — basic formatting
+### Example
+
+From the plugin's own test method (`TEST_tagger.4dm`), default options (mode `"simple"`, hiragana, full width):
 
 ```4d
-C_OBJECT($options)
-
-$options:=New object("format";"hiragana")
-$yomis:=Phonetics ("野茂英雄";$options)
- // [{"word":"野茂";"yomi":"やも"}, {"word":"英雄";"yomi":"えいゆう"}]
-
-$options:=New object("format";"katakana")
-$yomis:=Phonetics ("野茂英雄";$options)
- // [{"word":"野茂";"yomi":"ヤモ"}, {"word":"英雄";"yomi":"エイユウ"}]
-
-$options:=New object("format";"katakana";"width";"half")
-$yomis:=Phonetics ("野茂英雄";$options)
- // half-width katakana readings
-```
-
-### Example — detail mode (Windows only)
-
-```4d
-  //detail:windows only; 形態素分解 (morphological breakdown)
-$options:=New object("mode";"detail";"format";"katakana")
-$yomis:=Phonetics ("野茂英雄";$options)
-
-For each ($word;$yomis)
-	ALERT ($word.word+" → "+$word.yomi+"  (POS "+String ($word.partOfSpeech)+")")
-End for each
-```
-
-### Example — no options (defaults)
-
-```4d
+//%attributes = {}
 $text:="伊能忠敬は全国を歩いて測量の旅をしたよ"
 $status:=Phonetics ($text)
- // simple mode, hiragana, full width - one object per word
 ```
 
-### Example — building a furigana display
+From the plugin's own test method (`TEST.4dm`), exercising `format`, `width`, and `mode`:
 
 ```4d
-$text:="伊能忠敬は全国を歩いて測量の旅をしたよ"
-$words:=Phonetics ($text)
+//%attributes = {}
+C_OBJECT:C1216($options)
+
+$options:=New object:C1471("format";"hiragana")
+$yomis:=Phonetics ("野茂英雄";$options)
+
+$options:=New object:C1471("format";"katakana")
+$yomis:=Phonetics ("野茂英雄";$options)
+
+$options:=New object:C1471("format";"katakana";"width";"half")
+$yomis:=Phonetics ("野茂英雄";$options)
+
+  //detail:windows only; 形態素分解
+$options:=New object:C1471("mode";"detail";"format";"katakana")
+$yomis:=Phonetics ("野茂英雄";$options)
+```
+
+Building a furigana display from the result, illustrating a realistic follow-on use (verified commands only):
+
+```4d
+$words:=Phonetics ("野茂英雄")
 
 $html:=""
 For each ($word;$words)
@@ -192,13 +162,15 @@ End for each
 
 ---
 
-## Behavior notes & edge cases
+## Error handling & troubleshooting
 
-- **Empty input**: both commands return an empty result (`""` for `Phonetic`, an empty collection for `Phonetics`) rather than raising an error.
-- **Non-Japanese input**: runs through the same tokenizer/IME; tokens with no derivable reading are dropped from `Phonetic`'s output, or appear with an empty/unchanged `yomi` in `Phonetics`, depending on platform. If your text is a mix of Japanese and other scripts and exact fidelity matters, test on both platforms — macOS and Windows tokenize mixed-script runs slightly differently.
-- **Windows without MS-IME installed**: both commands return an empty result. There's no way to detect "IME missing" vs. "genuinely no reading" from the return value alone — if you need to distinguish these, check for an empty collection/string as your production fallback signal, or determine the trigger for it, as this plugin does not surface COM errors up to 4D.
-- **`"lexical"` mode on Japanese text**: not supported by the underlying OS APIs — use it only for English input.
-- **`"detail"` / `"multiple"` modes on macOS**: silently downgrade to `"simple"` behavior. Don't rely on the extra fields being present cross-platform; if your code reads `.partOfSpeech` etc., guard it with `OB Is defined` first if the code needs to run on both macOS and Windows.
+- **Empty input returns an empty result, not an error.** Both commands return `""` (`Phonetic`) or an empty collection (`Phonetics`) for empty or unusable input text, on both platforms — there's nothing to catch.
+- **Missing MS-IME on Windows fails silently.** If the Japanese IME COM component can't be resolved, created, or opened, both commands return an empty result with no exception. If you're getting unexpected empty results on a specific Windows machine, check that the Japanese IME is actually installed there before assuming a bug in your calling code.
+- **`"mode":"multiple"` is a no-op — don't use it.** It isn't recognized by the option parser and silently falls back to the current/default mode. If you need every candidate reading per word rather than just the top one, there's no supported way to get that from this plugin's current 4D-facing interface.
+- **`"detail"` mode gives you nothing extra on macOS.** If your code depends on `partOfSpeech`/`isStartOfPhrase`/etc. being present, it will only ever see them on Windows — guard for the field's presence (e.g. `OB Is defined`) if the same code path runs on both platforms.
+- **`"lexical"` mode means two different things depending on platform.** On macOS it's English lexical-class tagging (`{ word ; tag }`, no Japanese reading). On Windows it silently behaves like `"detail"` mode (`{ word ; yomi ; partOfSpeech ; ... }`, no `tag` field at all). Don't write cross-platform code that assumes either shape without branching on platform or checking which fields are actually present.
+- **A typo'd option value is ignored, not rejected.** Misspelling `"format":"katakan"` (missing the final `a`) won't error — it silently falls back to the default (`"hiragana"`). Double-check option spelling if a result doesn't match what you configured.
+- **`partOfSpeech` is an opaque numeric code.** The plugin doesn't ship a translation table from the raw Windows IME part-of-speech IDs to readable labels; treat the value as an internal identifier rather than something self-explanatory.
 
 ---
 
@@ -214,16 +186,9 @@ $words:=Phonetics ("野茂英雄")
  // Word-by-word with formatting
 $words:=Phonetics ("野茂英雄";New object("format";"katakana";"width";"half"))
 
- // Morphological detail (Windows only)
+ // Morphological detail — Windows only; behaves like "simple" on macOS
 $words:=Phonetics ("野茂英雄";New object("mode";"detail"))
 
- // All reading candidates per word (Windows only)
-$words:=Phonetics ("野茂英雄";New object("mode";"multiple"))
-
- // English lexical tagging (not for Japanese text)
+ // English lexical tagging — macOS only; Windows silently gives detail fields instead
 $tags:=Phonetics ("The quick brown fox";New object("mode";"lexical"))
 ```
-
-<img width="705" alt="2016-08-02 0 11 31" src="https://cloud.githubusercontent.com/assets/1725068/17298653/d0e7fb5c-5845-11e6-8e5e-96bccf5911c6.png">
-
-<img width="826" alt="Screen Shot 2020-06-07 at 20 00 17" src="https://user-images.githubusercontent.com/1725068/83967109-90547a80-a8f9-11ea-9d65-04f47debe5da.png">
