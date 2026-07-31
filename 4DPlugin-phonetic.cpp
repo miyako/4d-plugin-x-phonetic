@@ -32,7 +32,11 @@ void PluginMain(PA_long32 selector, PA_PluginParameters params) {
     }
     catch(...)
     {
-        
+        // Previously this swallowed every exception with no trace at all,
+        // which made field crashes/hangs undiagnosable. At minimum log it.
+#if VERSIONDEBUG
+        fprintf(stderr, "4DPlugin-phonetic: uncaught exception in selector %ld\n", (long)selector);
+#endif
     }
 }
 
@@ -78,31 +82,41 @@ void Phonetic(PA_PluginParameters params) {
 #if VERSIONMAC
     NSString *sourceText = Param1.copyUTF16String();
     NSMutableString *outputTextHiragana = [[NSMutableString alloc]init];
-    CFLocaleRef locale = CFLocaleCopyCurrent();
-    CFRange range = CFRangeMake(0, [sourceText length]);
     
-    CFStringTokenizerRef tokenizer = CFStringTokenizerCreate(kCFAllocatorDefault,
-                                                             (CFStringRef)sourceText,
-                                                             range,
-                                                             kCFStringTokenizerUnitWordBoundary,
-                                                             locale);
-    CFStringTokenizerTokenType tokenType = CFStringTokenizerGoToTokenAtIndex(tokenizer, 0);
-    while (tokenType != kCFStringTokenizerTokenNone)
-    {
-        range = CFStringTokenizerGetCurrentTokenRange(tokenizer);
-        CFTypeRef latinTranscription = CFStringTokenizerCopyCurrentTokenAttribute(tokenizer, kCFStringTokenizerAttributeLatinTranscription);
-        if(latinTranscription)
-        {
-            NSMutableString *hiragana = [(NSString *)latinTranscription mutableCopy];
-            CFStringTransform((CFMutableStringRef)hiragana, NULL, kCFStringTransformLatinHiragana, false);
-            CFRelease(latinTranscription);
-            [outputTextHiragana appendString:hiragana];
-            [hiragana release];
+    // CFStringTokenizerCreate/CFStringTokenizerGoToTokenAtIndex are plain C
+    // functions operating on the opaque CF object - unlike ObjC messaging,
+    // passing a nil/invalid CFStringRef here is undefined behavior and
+    // typically crashes rather than degrading gracefully. Guard it.
+    if (sourceText && [sourceText length] > 0) {
+        
+        CFLocaleRef locale = CFLocaleCopyCurrent();
+        CFRange range = CFRangeMake(0, [sourceText length]);
+        
+        CFStringTokenizerRef tokenizer = CFStringTokenizerCreate(kCFAllocatorDefault,
+                                                                 (CFStringRef)sourceText,
+                                                                 range,
+                                                                 kCFStringTokenizerUnitWordBoundary,
+                                                                 locale);
+        if (tokenizer) {
+            CFStringTokenizerTokenType tokenType = CFStringTokenizerGoToTokenAtIndex(tokenizer, 0);
+            while (tokenType != kCFStringTokenizerTokenNone)
+            {
+                range = CFStringTokenizerGetCurrentTokenRange(tokenizer);
+                CFTypeRef latinTranscription = CFStringTokenizerCopyCurrentTokenAttribute(tokenizer, kCFStringTokenizerAttributeLatinTranscription);
+                if(latinTranscription)
+                {
+                    NSMutableString *hiragana = [(NSString *)latinTranscription mutableCopy];
+                    CFStringTransform((CFMutableStringRef)hiragana, NULL, kCFStringTransformLatinHiragana, false);
+                    CFRelease(latinTranscription);
+                    [outputTextHiragana appendString:hiragana];
+                    [hiragana release];
+                }
+                tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer);
+            }
+            CFRelease(tokenizer);
         }
-        tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer);
+        CFRelease(locale);
     }
-    CFRelease(tokenizer);
-    CFRelease(locale);
     
     returnValue.setUTF16String(outputTextHiragana);
     [outputTextHiragana release];
@@ -131,8 +145,8 @@ void Phonetic(PA_PluginParameters params) {
                     }
                     
                     SysFreeString(sourceText);
+                    ifelang->Close();
                 }
-                ifelang->Close();
                 ifelang->Release();
             }
         }
@@ -242,7 +256,7 @@ void Phonetics(PA_PluginParameters params) {
     
     NSString *sourceText = Param1.copyUTF16String();
 
-    if(mode != phonetic_mode_lexical) {
+    if(mode != phonetic_mode_lexical && sourceText && [sourceText length] > 0) {
         
            CFLocaleRef locale = CFLocaleCopyCurrent();
            CFRange range = CFRangeMake(0, [sourceText length]);
@@ -253,56 +267,58 @@ void Phonetics(PA_PluginParameters params) {
                                                                     kCFStringTokenizerUnitWordBoundary,
                                                                     locale);
            
-           CFStringTokenizerTokenType tokenType = CFStringTokenizerGoToTokenAtIndex(tokenizer, 0);
-           
-           while (tokenType != kCFStringTokenizerTokenNone)
-           {
-               range = CFStringTokenizerGetCurrentTokenRange(tokenizer);
-                       
-               CFTypeRef latinTranscription = CFStringTokenizerCopyCurrentTokenAttribute(tokenizer, kCFStringTokenizerAttributeLatinTranscription);
-               if(latinTranscription)
+           if (tokenizer) {
+               CFStringTokenizerTokenType tokenType = CFStringTokenizerGoToTokenAtIndex(tokenizer, 0);
+               
+               while (tokenType != kCFStringTokenizerTokenNone)
                {
-                   PA_ObjectRef word = PA_CreateObject();
-                   
-                   C_TEXT t;
-                   CUTF16String u16;
-                   
-                   t.setUTF16String([sourceText substringWithRange:NSMakeRange(range.location, range.length)]);
-                   t.copyUTF16String(&u16);
-                   ob_set_a(word, L"word", &u16);
-                   
-                   NSMutableString *outputText = [(NSString *)latinTranscription mutableCopy];
-                   CFStringTransform((CFMutableStringRef)outputText, NULL, kCFStringTransformLatinHiragana, false);
-                   
-                   if (format == phonetic_format_katakana) {
-                       CFStringTransform((CFMutableStringRef)outputText,
-                       NULL,
-                       CFSTR("[:^Modifier Letter:];Hiragana-Katakana"),
-                       false);
+                   range = CFStringTokenizerGetCurrentTokenRange(tokenizer);
+                           
+                   CFTypeRef latinTranscription = CFStringTokenizerCopyCurrentTokenAttribute(tokenizer, kCFStringTokenizerAttributeLatinTranscription);
+                   if(latinTranscription)
+                   {
+                       PA_ObjectRef word = PA_CreateObject();
+                       
+                       C_TEXT t;
+                       CUTF16String u16;
+                       
+                       t.setUTF16String([sourceText substringWithRange:NSMakeRange(range.location, range.length)]);
+                       t.copyUTF16String(&u16);
+                       ob_set_a(word, L"word", &u16);
+                       
+                       NSMutableString *outputText = [(NSString *)latinTranscription mutableCopy];
+                       CFStringTransform((CFMutableStringRef)outputText, NULL, kCFStringTransformLatinHiragana, false);
+                       
+                       if (format == phonetic_format_katakana) {
+                           CFStringTransform((CFMutableStringRef)outputText,
+                           NULL,
+                           CFSTR("[:^Modifier Letter:];Hiragana-Katakana"),
+                           false);
+                       }
+                       if (width == phonetic_width_half) {
+                           CFStringTransform((CFMutableStringRef)outputText,
+                           NULL,
+                           kCFStringTransformFullwidthHalfwidth,
+                           false);
+                       }
+                       
+                       t.setUTF16String(outputText);
+                       t.copyUTF16String(&u16);
+                       ob_set_a(word, L"yomi", &u16);
+            
+                       [outputText release];
+                       
+                       PA_Variable v = PA_CreateVariable(eVK_Object);
+                       PA_SetObjectVariable(&v, word);
+                       PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
+                       PA_ClearVariable(&v);
+                       
+                       CFRelease(latinTranscription);
                    }
-                   if (width == phonetic_width_half) {
-                       CFStringTransform((CFMutableStringRef)outputText,
-                       NULL,
-                       kCFStringTransformFullwidthHalfwidth,
-                       false);
-                   }
-                   
-                   t.setUTF16String(outputText);
-                   t.copyUTF16String(&u16);
-                   ob_set_a(word, L"yomi", &u16);
-        
-                   [outputText release];
-                   
-                   PA_Variable v = PA_CreateVariable(eVK_Object);
-                   PA_SetObjectVariable(&v, word);
-                   PA_SetCollectionElement(returnValues, PA_GetCollectionLength(returnValues), v);
-                   PA_ClearVariable(&v);
-                   
-                   CFRelease(latinTranscription);
+                   tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer);
                }
-               tokenType = CFStringTokenizerAdvanceToNextToken(tokenizer);
+               CFRelease(tokenizer);
            }
-           CFRelease(tokenizer);
            CFRelease(locale);
     }
             
@@ -418,9 +434,13 @@ void Phonetics(PA_PluginParameters params) {
                     INT cwchInput = Param1.getUTF16Length();
                     WCHAR *pwchInput = (WCHAR *)Param1.getUTF16StringPtr();
                     
-                    std::vector<DWORD>pfCInfo(cwchInput);
+                    // std::vector<>(0) is legal, but &vec[0] on an empty vector is UB
+                    // (there is no element 0 to reference). Use .data() instead, which
+                    // is well-defined for empty vectors, and skip the whole call when
+                    // there's nothing to process.
+                    std::vector<DWORD>pfCInfo(cwchInput > 0 ? cwchInput : 0);
                     
-                    for (size_t i = 0; i < cwchInput; ++i) {
+                    for (size_t i = 0; i < static_cast<size_t>(cwchInput); ++i) {
                         pfCInfo[i] = FELANG_CLMN_NOPBREAK;
                     }
                     
@@ -428,19 +448,37 @@ void Phonetics(PA_PluginParameters params) {
                     
                     HRESULT status = S_FALSE;
                     
-                    PA_CollectionRef returnValue;
+                    PA_CollectionRef returnValue = NULL;
                     
                     if(mode == phonetic_mode_multiple) {
                         returnValue = PA_CreateCollection();
                     }
 
+                    // Defensive iteration cap: GetJMorphResult is meant to return
+                    // something other than S_OK once there are no more results, but
+                    // if the IME COM component ever misbehaves, an unbounded loop
+                    // here would hang the calling (likely UI) thread indefinitely.
+                    const int kMaxIterations = 10000;
+                    int iterationCount = 0;
+
+                    // A mutable empty buffer to hand back on continuation calls,
+                    // instead of a read-only string literal (some Win32-style
+                    // conversion APIs write back into buffers they're given;
+                    // writing to `L""` would crash).
+                    WCHAR emptyBuf[1] = { 0 };
+
                     do
                     {
+                        ++iterationCount;
+                        if (iterationCount > kMaxIterations) {
+                            status = S_FALSE;
+                            break;
+                        }
                         status = ifelang->GetJMorphResult(dwRequest,
                                                           dwCMode,
                                                           cwchInput,
                                                           pwchInput,
-                                                          &pfCInfo[0],
+                                                          pfCInfo.data(),
                                                           &pResult);
                         
                         if (status == S_OK) {
@@ -489,7 +527,7 @@ void Phonetics(PA_PluginParameters params) {
                             if(mode == phonetic_mode_multiple) {
                                 pwchInput = NULL;
                             }else{
-                                pwchInput = L"";
+                                pwchInput = emptyBuf;
                             }
                             
                         }
@@ -503,8 +541,8 @@ void Phonetics(PA_PluginParameters params) {
                         PA_ClearVariable(&v);
                     }
   
+                    ifelang->Close();
                 }
-                ifelang->Close();
                 ifelang->Release();
             }
         }
