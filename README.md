@@ -5,10 +5,6 @@
 [![license](https://img.shields.io/github/license/miyako/4d-plugin-x-phonetic)](LICENSE)
 ![downloads](https://img.shields.io/github/downloads/miyako/4d-plugin-x-phonetic/total)
 
-<img width="705" alt="2016-08-02 0 11 31" src="https://cloud.githubusercontent.com/assets/1725068/17298653/d0e7fb5c-5845-11e6-8e5e-96bccf5911c6.png">
-
-<img width="826" alt="Screen Shot 2020-06-07 at 20 00 17" src="https://user-images.githubusercontent.com/1725068/83967109-90547a80-a8f9-11ea-9d65-04f47debe5da.png">
-
 A 4D plugin that converts Japanese text into its phonetic reading (*yomi*), with optional word-by-word breakdown, part-of-speech detail, and English lexical tagging. Built on the OS's native language engine — **Kotoeri / `CFStringTokenizer`** on macOS, **MS-IME (`IFELanguage`)** on Windows — so no dictionary or model ships with the plugin itself.
 
 Two commands are exposed:
@@ -227,3 +223,7 @@ $words:=Phonetics ("野茂英雄";New object("mode";"multiple"))
  // English lexical tagging (not for Japanese text)
 $tags:=Phonetics ("The quick brown fox";New object("mode";"lexical"))
 ```
+
+<img width="705" alt="2016-08-02 0 11 31" src="https://cloud.githubusercontent.com/assets/1725068/17298653/d0e7fb5c-5845-11e6-8e5e-96bccf5911c6.png">
+
+<img width="826" alt="Screen Shot 2020-06-07 at 20 00 17" src="https://user-images.githubusercontent.com/1725068/83967109-90547a80-a8f9-11ea-9d65-04f47debe5da.png">
