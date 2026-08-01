@@ -14,6 +14,17 @@
 #include "4DPluginAPI.h"
 
 #if VERSIONWIN
+// msime.h pulls in <windows.h> internally. Without WIN32_LEAN_AND_MEAN,
+// <windows.h> auto-includes the legacy <winsock.h>; support/4DPlugin-JSON.h
+// below then includes <winsock2.h>, and the two collide (duplicate
+// sockaddr/fd_set/accept/bind/... declarations with different linkage --
+// this is exactly the C2011/C2375 cascade MSVC reports when both winsock
+// headers end up in the same translation unit). Defining this first
+// prevents windows.h from pulling in winsock.h at all, so there's nothing
+// left for winsock2.h to conflict with.
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
 #include "msime.h"
 #endif
 
