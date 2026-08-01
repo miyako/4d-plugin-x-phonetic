@@ -195,7 +195,7 @@ void Phonetics(PA_PluginParameters params) {
         
         CUTF8String _width;
         if (ob_is_defined(options, L"width")) {
-            if (ob_get_s(options, L"width", &_width)) {
+            if (ob_get_a(options, L"width", &_width)) {
                 
                 if (_width == (const uint8_t *)"full") {
                     width = phonetic_width_full;
@@ -211,7 +211,7 @@ void Phonetics(PA_PluginParameters params) {
         
         CUTF8String _mode;
         if(ob_is_defined(options, L"mode")) {
-            if(ob_get_s(options, L"mode", &_mode)) {
+            if(ob_get_a(options, L"mode", &_mode)) {
                 
                 if(_mode == (const uint8_t *)"simple") {
                     mode = phonetic_mode_simple;
@@ -231,7 +231,7 @@ void Phonetics(PA_PluginParameters params) {
         
         CUTF8String _format;
         if (ob_is_defined(options, L"format")) {
-            if (ob_get_s(options, L"format", &_format)) {
+            if (ob_get_a(options, L"format", &_format)) {
                 
                 if (_format == (const uint8_t *)"hiragana") {
                     format = phonetic_format_hiragana;
